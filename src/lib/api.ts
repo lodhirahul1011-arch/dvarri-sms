@@ -9,10 +9,14 @@ function getApiConfig() {
   if (useLocalDevApi) {
     return {
       baseUrl: `${window.location.origin}/__dev_api__/delivery-api`,
+      headers: {
+        "Content-Type": "application/json",
+      },
     };
   }
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
 
   if (!supabaseUrl) {
     throw new Error(
@@ -20,22 +24,32 @@ function getApiConfig() {
     );
   }
 
+  if (!supabaseAnonKey) {
+    throw new Error(
+      "Missing VITE_SUPABASE_ANON_KEY. Add it before running or deploying the frontend."
+    );
+  }
+
   return {
     baseUrl: `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/delivery-api`,
+    headers: {
+      "Content-Type": "application/json",
+      apikey: supabaseAnonKey,
+      Authorization: `Bearer ${supabaseAnonKey}`,
+    },
   };
 }
-
-const jsonHeaders = {
-  "Content-Type": "application/json",
-} as const;
 
 function parseApiError(payload: unknown, fallback: string): Error {
   if (payload && typeof payload === "object") {
     const body = payload as Record<string, unknown>;
     const message =
-      typeof body.error === "string" ? body.error :
-      typeof body.message === "string" ? body.message :
-      fallback;
+      typeof body.error === "string"
+        ? body.error
+        : typeof body.message === "string"
+          ? body.message
+          : fallback;
+
     const code = typeof body.code === "string" ? body.code : "";
 
     if (code === "NOT_FOUND") {
@@ -50,74 +64,102 @@ function parseApiError(payload: unknown, fallback: string): Error {
   return new Error(fallback);
 }
 
+async function parseJsonSafely(res: Response) {
+  const text = await res.text();
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { error: text };
+  }
+}
+
 export async function getNumbers(): Promise<PhoneNumber[]> {
-  const { baseUrl } = getApiConfig();
-  const res = await fetch(`${baseUrl}/numbers`);
-  const json = await res.json();
+  const { baseUrl, headers } = getApiConfig();
+
+  const res = await fetch(`${baseUrl}/numbers`, {
+    method: "GET",
+    headers,
+  });
+
+  const json = await parseJsonSafely(res);
   if (!res.ok) throw parseApiError(json, "Failed to fetch numbers");
-  return json.data || [];
+
+  return (json as { data?: PhoneNumber[] })?.data || [];
 }
 
 export async function saveNumber(number: string, label?: string): Promise<PhoneNumber> {
-  const { baseUrl } = getApiConfig();
+  const { baseUrl, headers } = getApiConfig();
+
   const res = await fetch(`${baseUrl}/numbers`, {
     method: "POST",
-    headers: jsonHeaders,
+    headers,
     body: JSON.stringify({ number, label }),
   });
-  const json = await res.json();
+
+  const json = await parseJsonSafely(res);
   if (!res.ok) throw parseApiError(json, "Failed to save number");
-  return json.data;
+
+  return (json as { data: PhoneNumber }).data;
 }
 
 export async function deleteNumber(id: string): Promise<void> {
-  const { baseUrl } = getApiConfig();
+  const { baseUrl, headers } = getApiConfig();
+
   const res = await fetch(`${baseUrl}/numbers/${id}`, {
     method: "DELETE",
+    headers,
   });
+
   if (!res.ok) {
-    let json: unknown = null;
-    try {
-      json = await res.json();
-    } catch {
-      json = null;
-    }
+    const json = await parseJsonSafely(res);
     throw parseApiError(json, "Failed to delete number");
   }
 }
 
 export async function sendSms(phoneNumber: string, buttonLabel: string): Promise<SendResult> {
-  const { baseUrl } = getApiConfig();
+  const { baseUrl, headers } = getApiConfig();
+
   const res = await fetch(`${baseUrl}/send-sms`, {
     method: "POST",
-    headers: jsonHeaders,
-    body: JSON.stringify({ phone_number: phoneNumber, button_label: buttonLabel }),
+    headers,
+    body: JSON.stringify({
+      phone_number: phoneNumber,
+      button_label: buttonLabel,
+    }),
   });
-  const json = await res.json();
+
+  const json = await parseJsonSafely(res);
   if (!res.ok) throw parseApiError(json, "Failed to send SMS");
-  return json;
+
+  return json as SendResult;
 }
 
 export async function getLogs(): Promise<SmsLog[]> {
-  const { baseUrl } = getApiConfig();
-  const res = await fetch(`${baseUrl}/logs`);
-  const json = await res.json();
+  const { baseUrl, headers } = getApiConfig();
+
+  const res = await fetch(`${baseUrl}/logs`, {
+    method: "GET",
+    headers,
+  });
+
+  const json = await parseJsonSafely(res);
   if (!res.ok) throw parseApiError(json, "Failed to fetch logs");
-  return json.data || [];
+
+  return (json as { data?: SmsLog[] })?.data || [];
 }
 
 export async function clearLogs(): Promise<void> {
-  const { baseUrl } = getApiConfig();
+  const { baseUrl, headers } = getApiConfig();
+
   const res = await fetch(`${baseUrl}/logs`, {
     method: "DELETE",
+    headers,
   });
+
   if (!res.ok) {
-    let json: unknown = null;
-    try {
-      json = await res.json();
-    } catch {
-      json = null;
-    }
+    const json = await parseJsonSafely(res);
     throw parseApiError(json, "Failed to clear logs");
   }
 }

@@ -4,18 +4,14 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
+  "Access-Control-Allow-Headers": "content-type, authorization, x-client-info, apikey",
 };
 
 const app = new Hono();
 
 function getRequiredEnv(name: string): string {
   const value = Deno.env.get(name)?.trim();
-
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-
+  if (!value) throw new Error(`Missing required environment variable: ${name}`);
   return value;
 }
 
@@ -29,11 +25,8 @@ function getSupabase() {
 function getFirstEnv(...names: string[]): string | undefined {
   for (const name of names) {
     const value = Deno.env.get(name)?.trim();
-    if (value) {
-      return value;
-    }
+    if (value) return value;
   }
-
   return undefined;
 }
 
@@ -176,7 +169,7 @@ app.options("*", () => {
   return new Response(null, { status: 200, headers: corsHeaders });
 });
 
-app.get("/delivery-api/numbers", async (c) => {
+app.get("/numbers", async (c) => {
   try {
     const supabase = getSupabase();
     const { data, error } = await supabase
@@ -191,7 +184,7 @@ app.get("/delivery-api/numbers", async (c) => {
   }
 });
 
-app.post("/delivery-api/numbers", async (c) => {
+app.post("/numbers", async (c) => {
   try {
     const body = await c.req.json();
     const { number, label } = body;
@@ -217,7 +210,7 @@ app.post("/delivery-api/numbers", async (c) => {
   }
 });
 
-app.delete("/delivery-api/numbers/:id", async (c) => {
+app.delete("/numbers/:id", async (c) => {
   try {
     const id = c.req.param("id");
     const supabase = getSupabase();
@@ -229,7 +222,7 @@ app.delete("/delivery-api/numbers/:id", async (c) => {
   }
 });
 
-app.post("/delivery-api/send-sms", async (c) => {
+app.post("/send-sms", async (c) => {
   try {
     const body = await c.req.json();
     const { phone_number, button_label } = body;
@@ -277,7 +270,7 @@ app.post("/delivery-api/send-sms", async (c) => {
   }
 });
 
-app.get("/delivery-api/logs", async (c) => {
+app.get("/logs", async (c) => {
   try {
     const supabase = getSupabase();
     const { data, error } = await supabase
@@ -293,7 +286,7 @@ app.get("/delivery-api/logs", async (c) => {
   }
 });
 
-app.delete("/delivery-api/logs", async (c) => {
+app.delete("/logs", async (c) => {
   try {
     const supabase = getSupabase();
     const { error } = await supabase.from("sms_logs").delete().neq("id", "");
