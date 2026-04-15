@@ -1,11 +1,23 @@
 import { Hono } from "npm:hono@4";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "content-type, authorization, x-client-info, apikey",
-};
+const allowedOrigins = new Set([
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "https://dvarri-sms.onrender.com",
+]);
+
+function buildCorsHeaders(origin: string | null) {
+  const allowOrigin = origin && allowedOrigins.has(origin) ? origin : "*";
+
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "content-type, authorization, x-client-info, apikey",
+    "Access-Control-Max-Age": "86400",
+    "Vary": "Origin",
+  };
+}
 
 const app = new Hono();
 
@@ -165,8 +177,11 @@ async function sendSMS(phone: string, message: string): Promise<{ success: boole
   }
 }
 
-app.options("*", () => {
-  return new Response(null, { status: 200, headers: corsHeaders });
+app.options("*", (c) => {
+  return new Response(null, {
+    status: 200,
+    headers: buildCorsHeaders(c.req.header("origin") ?? null),
+  });
 });
 
 app.get("/numbers", async (c) => {
@@ -298,12 +313,34 @@ app.delete("/logs", async (c) => {
   }
 });
 
+function normalizeFunctionRequest(req: Request): Request {
+  const url = new URL(req.url);
+  const prefixes = ["/functions/v1/delivery-api", "/delivery-api"];
+
+  for (const prefix of prefixes) {
+    if (url.pathname === prefix) {
+      url.pathname = "/";
+      return new Request(url, req);
+    }
+
+    if (url.pathname.startsWith(`${prefix}/`)) {
+      url.pathname = url.pathname.slice(prefix.length) || "/";
+      return new Request(url, req);
+    }
+  }
+
+  return req;
+}
+
 Deno.serve(async (req) => {
+  const corsHeaders = buildCorsHeaders(req.headers.get("origin"));
+
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
-  const res = await app.fetch(req);
+  const normalizedReq = normalizeFunctionRequest(req);
+  const res = await app.fetch(normalizedReq);
 
   const headers = new Headers(res.headers);
   Object.entries(corsHeaders).forEach(([k, v]) => headers.set(k, v));

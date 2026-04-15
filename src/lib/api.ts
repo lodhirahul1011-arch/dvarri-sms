@@ -46,7 +46,7 @@ function parseApiError(payload: unknown, fallback: string): Error {
 
     if (code === "NOT_FOUND") {
       return new Error(
-        "delivery-api Edge Function current Supabase project me deployed nahi hai, ya route/function name mismatch hai."
+        "delivery-api Edge Function current Supabase project me deployed nahi hai, ya request path function tak sahi nahi pahunch raha."
       );
     }
 

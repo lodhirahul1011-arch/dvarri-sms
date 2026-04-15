@@ -131,7 +131,7 @@ try {
 
   if (-not $SkipFunctions) {
     Write-Host "Deploying Edge Function delivery-api to project $ProjectRef..."
-    & npx.cmd supabase functions deploy delivery-api --project-ref $ProjectRef --use-api --workdir $supabaseDir
+    & npx.cmd supabase functions deploy delivery-api --project-ref $ProjectRef --use-api --no-verify-jwt --workdir $supabaseDir
     if ($LASTEXITCODE -ne 0) {
       throw "supabase functions deploy failed."
     }
