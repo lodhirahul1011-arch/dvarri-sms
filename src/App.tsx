@@ -80,7 +80,7 @@ export default function App() {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">SMS Template Preview</p>
           <div className="bg-gray-900 rounded-xl p-4 font-mono text-xs leading-relaxed text-green-400 whitespace-pre-wrap">
-{`Dvaarikart:Your order #ORDER_ID# (AWB: #AWB#) is out for delivery.\nOpen Box Delivery OTP: #OTP# valid till #TIME# today.\nPlease share OTP after checking the product condition.\nDelivery Partner: Dvaarikart`}
+{`Dvaarikart:Your order#ORDER_ID#(AWB:#AWB#) is out for delivery. Open Box Delivery OTP:#OTP#valid till#TIME#today. Please share OTP after checking the product condition. Delivery Partner: Dvaarikart - GRAHNETRA AI LABS`}
           </div>
           <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
             {[

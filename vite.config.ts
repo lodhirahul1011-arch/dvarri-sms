@@ -34,6 +34,40 @@ function createDevSmsPlugin(env: Record<string, string>) {
     const times = ['9 AM', '11 AM', '1 PM', '3 PM', '5 PM', '7 PM', '9 PM', '11 PM'];
     return times[Math.floor(Math.random() * times.length)];
   };
+  const buildMessage = (orderId: string, awb: string, otp: string, timeSlot: string) =>
+    `Dvaarikart:Your order${orderId}(AWB:${awb}) is out for delivery. Open Box Delivery OTP:${otp}valid till${timeSlot}today. Please share OTP after checking the product condition. Delivery Partner: Dvaarikart - GRAHNETRA AI LABS`;
+  const buildSmsParams = (baseUrl: string, values: {
+    apiKey: string;
+    senderId: string;
+    message: string;
+    phoneNumber: string;
+    templateId: string;
+  }) => {
+    const params = new URLSearchParams({
+      apikey: values.apiKey,
+      message: values.message,
+    });
+
+    const usesFortiusParams = (() => {
+      try {
+        return new URL(baseUrl).hostname.toLowerCase().includes('smsfortius.org');
+      } catch {
+        return false;
+      }
+    })();
+
+    if (usesFortiusParams) {
+      params.set('senderid', values.senderId);
+      params.set('templateid', values.templateId);
+      params.set('number', values.phoneNumber);
+      return params;
+    }
+
+    params.set('senderID', values.senderId);
+    params.set('mobilenumber', values.phoneNumber);
+    params.set('templateID', values.templateId);
+    return params;
+  };
   const normalizeSmsProviderResponse = (status: number, text: string) => {
     let body: unknown = text;
 
@@ -147,14 +181,14 @@ function createDevSmsPlugin(env: Record<string, string>) {
             const awb = generateAwb();
             const otp = generateOtp();
             const timeSlot = generateTimeSlot();
-            const message = `Dvaarikart:Your order ${orderId} (AWB: ${awb}) is out for delivery. Open Box Delivery OTP: ${otp} valid till ${timeSlot} today. Please share OTP after checking the product condition. Delivery Partner: Dvaarikart`;
+            const message = buildMessage(orderId, awb, otp, timeSlot);
 
-            const params = new URLSearchParams({
-              apikey: apiKey,
-              senderID: senderId,
+            const params = buildSmsParams(baseUrl, {
+              apiKey,
+              senderId,
               message,
-              mobilenumber: phoneNumber,
-              templateID: templateId,
+              phoneNumber,
+              templateId,
             });
 
             let apiResponse: unknown;

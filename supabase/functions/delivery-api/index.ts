@@ -56,7 +56,43 @@ function generateTimeSlot(): string {
 }
 
 function buildMessage(orderId: string, awb: string, otp: string, time: string): string {
-  return `Dvaarikart:Your order ${orderId} (AWB: ${awb}) is out for delivery. Open Box Delivery OTP: ${otp} valid till ${time} today. Please share OTP after checking the product condition. Delivery Partner: Dvaarikart`;
+  return `Dvaarikart:Your order${orderId}(AWB:${awb}) is out for delivery. Open Box Delivery OTP:${otp}valid till${time}today. Please share OTP after checking the product condition. Delivery Partner: Dvaarikart - GRAHNETRA AI LABS`;
+}
+
+function buildSmsParams(
+  baseUrl: string,
+  values: {
+    apiKey: string;
+    senderId: string;
+    message: string;
+    phone: string;
+    templateId: string;
+  },
+) {
+  const params = new URLSearchParams({
+    apikey: values.apiKey,
+    message: values.message,
+  });
+
+  const usesFortiusParams = (() => {
+    try {
+      return new URL(baseUrl).hostname.toLowerCase().includes("smsfortius.org");
+    } catch {
+      return false;
+    }
+  })();
+
+  if (usesFortiusParams) {
+    params.set("senderid", values.senderId);
+    params.set("templateid", values.templateId);
+    params.set("number", values.phone);
+    return params;
+  }
+
+  params.set("senderID", values.senderId);
+  params.set("mobilenumber", values.phone);
+  params.set("templateID", values.templateId);
+  return params;
 }
 
 function normalizeSmsProviderResponse(status: number, text: string) {
@@ -117,12 +153,12 @@ async function sendSMS(phone: string, message: string): Promise<{ success: boole
   }
 
   try {
-    const params = new URLSearchParams({
-      apikey: apiKey,
-      senderID: senderId,
-      message: message,
-      mobilenumber: phone,
-      templateID: templateId,
+    const params = buildSmsParams(baseUrl, {
+      apiKey,
+      senderId,
+      message,
+      phone,
+      templateId,
     });
 
     const res = await fetch(`${baseUrl}?${params.toString()}`, {
