@@ -11,12 +11,11 @@ function getApiConfig() {
       baseUrl: `${window.location.origin}/__dev_api__/delivery-api`,
       headers: {
         "Content-Type": "application/json",
-      },
+      } as Record<string, string>,
     };
   }
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
-  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
 
   if (!supabaseUrl) {
     throw new Error(
@@ -24,25 +23,18 @@ function getApiConfig() {
     );
   }
 
-  if (!supabaseAnonKey) {
-    throw new Error(
-      "Missing VITE_SUPABASE_ANON_KEY. Add it before running or deploying the frontend."
-    );
-  }
-
   return {
     baseUrl: `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/delivery-api`,
     headers: {
       "Content-Type": "application/json",
-      apikey: supabaseAnonKey,
-      Authorization: `Bearer ${supabaseAnonKey}`,
-    },
+    } as Record<string, string>,
   };
 }
 
 function parseApiError(payload: unknown, fallback: string): Error {
   if (payload && typeof payload === "object") {
     const body = payload as Record<string, unknown>;
+
     const message =
       typeof body.error === "string"
         ? body.error
@@ -54,7 +46,7 @@ function parseApiError(payload: unknown, fallback: string): Error {
 
     if (code === "NOT_FOUND") {
       return new Error(
-        "Supabase project me `delivery-api` Edge Function deployed nahi hai. Ya to correct project ref use karo, ya current project par function deploy karo."
+        "delivery-api Edge Function current Supabase project me deployed nahi hai, ya route/function name mismatch hai."
       );
     }
 
@@ -66,6 +58,7 @@ function parseApiError(payload: unknown, fallback: string): Error {
 
 async function parseJsonSafely(res: Response) {
   const text = await res.text();
+
   if (!text) return null;
 
   try {
@@ -75,91 +68,94 @@ async function parseJsonSafely(res: Response) {
   }
 }
 
-export async function getNumbers(): Promise<PhoneNumber[]> {
+async function request<T>(path: string, options: RequestInit, fallbackError: string): Promise<T> {
   const { baseUrl, headers } = getApiConfig();
 
-  const res = await fetch(`${baseUrl}/numbers`, {
-    method: "GET",
-    headers,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl}${path}`, {
+      ...options,
+      headers: {
+        ...headers,
+        ...(options.headers || {}),
+      },
+    });
+  } catch (error) {
+    throw new Error(
+      error instanceof Error
+        ? `Network error: ${error.message}`
+        : "Network error while calling delivery API"
+    );
+  }
 
   const json = await parseJsonSafely(res);
-  if (!res.ok) throw parseApiError(json, "Failed to fetch numbers");
 
-  return (json as { data?: PhoneNumber[] })?.data || [];
+  if (!res.ok) {
+    throw parseApiError(json, fallbackError);
+  }
+
+  return json as T;
+}
+
+export async function getNumbers(): Promise<PhoneNumber[]> {
+  const json = await request<{ data?: PhoneNumber[] }>(
+    "/numbers",
+    { method: "GET" },
+    "Failed to fetch numbers"
+  );
+
+  return json?.data || [];
 }
 
 export async function saveNumber(number: string, label?: string): Promise<PhoneNumber> {
-  const { baseUrl, headers } = getApiConfig();
+  const json = await request<{ data: PhoneNumber }>(
+    "/numbers",
+    {
+      method: "POST",
+      body: JSON.stringify({ number, label }),
+    },
+    "Failed to save number"
+  );
 
-  const res = await fetch(`${baseUrl}/numbers`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ number, label }),
-  });
-
-  const json = await parseJsonSafely(res);
-  if (!res.ok) throw parseApiError(json, "Failed to save number");
-
-  return (json as { data: PhoneNumber }).data;
+  return json.data;
 }
 
 export async function deleteNumber(id: string): Promise<void> {
-  const { baseUrl, headers } = getApiConfig();
-
-  const res = await fetch(`${baseUrl}/numbers/${id}`, {
-    method: "DELETE",
-    headers,
-  });
-
-  if (!res.ok) {
-    const json = await parseJsonSafely(res);
-    throw parseApiError(json, "Failed to delete number");
-  }
+  await request<{ success?: boolean }>(
+    `/numbers/${id}`,
+    { method: "DELETE" },
+    "Failed to delete number"
+  );
 }
 
 export async function sendSms(phoneNumber: string, buttonLabel: string): Promise<SendResult> {
-  const { baseUrl, headers } = getApiConfig();
-
-  const res = await fetch(`${baseUrl}/send-sms`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      phone_number: phoneNumber,
-      button_label: buttonLabel,
-    }),
-  });
-
-  const json = await parseJsonSafely(res);
-  if (!res.ok) throw parseApiError(json, "Failed to send SMS");
-
-  return json as SendResult;
+  return await request<SendResult>(
+    "/send-sms",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        phone_number: phoneNumber,
+        button_label: buttonLabel,
+      }),
+    },
+    "Failed to send SMS"
+  );
 }
 
 export async function getLogs(): Promise<SmsLog[]> {
-  const { baseUrl, headers } = getApiConfig();
+  const json = await request<{ data?: SmsLog[] }>(
+    "/logs",
+    { method: "GET" },
+    "Failed to fetch logs"
+  );
 
-  const res = await fetch(`${baseUrl}/logs`, {
-    method: "GET",
-    headers,
-  });
-
-  const json = await parseJsonSafely(res);
-  if (!res.ok) throw parseApiError(json, "Failed to fetch logs");
-
-  return (json as { data?: SmsLog[] })?.data || [];
+  return json?.data || [];
 }
 
 export async function clearLogs(): Promise<void> {
-  const { baseUrl, headers } = getApiConfig();
-
-  const res = await fetch(`${baseUrl}/logs`, {
-    method: "DELETE",
-    headers,
-  });
-
-  if (!res.ok) {
-    const json = await parseJsonSafely(res);
-    throw parseApiError(json, "Failed to clear logs");
-  }
+  await request<{ success?: boolean }>(
+    "/logs",
+    { method: "DELETE" },
+    "Failed to clear logs"
+  );
 }
