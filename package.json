@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
-    "supabase:deploy": "powershell -ExecutionPolicy Bypass -File scripts/deploy-supabase.ps1"
+    "supabase:deploy": "powershell -ExecutionPolicy Bypass -File scripts/deploy-supabase.ps1",
+    "supabase:deploy:function": "powershell -ExecutionPolicy Bypass -File scripts/deploy-supabase.ps1 -SkipMigrations"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.103.0",

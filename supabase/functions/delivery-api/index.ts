@@ -42,6 +42,34 @@ function getFirstEnv(...names: string[]): string | undefined {
   return undefined;
 }
 
+function readStringValue(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+async function readBody(req: Request): Promise<Record<string, unknown>> {
+  const contentType = req.headers.get("content-type")?.toLowerCase() ?? "";
+
+  if (contentType.includes("application/json")) {
+    const body = await req.json();
+    return body && typeof body === "object" ? body as Record<string, unknown> : {};
+  }
+
+  if (contentType.includes("application/x-www-form-urlencoded")) {
+    const formData = await req.formData();
+    return Object.fromEntries(formData.entries());
+  }
+
+  const text = await req.text();
+  if (!text.trim()) return {};
+
+  try {
+    const body = JSON.parse(text);
+    return body && typeof body === "object" ? body as Record<string, unknown> : {};
+  } catch {
+    throw new Error("Invalid request body. Expected JSON.");
+  }
+}
+
 function generateOrderId(): string {
   return "OD" + Array.from({ length: 11 }, () => Math.floor(Math.random() * 10)).join("");
 }
@@ -201,8 +229,9 @@ app.get("/numbers", async (c) => {
 
 app.post("/numbers", async (c) => {
   try {
-    const body = await c.req.json();
-    const { number, label } = body;
+    const body = await readBody(c.req.raw);
+    const number = readStringValue(body.number);
+    const label = readStringValue(body.label);
 
     if (!number) {
       return c.json({ error: "Phone number is required" }, 400);
@@ -239,8 +268,9 @@ app.delete("/numbers/:id", async (c) => {
 
 app.post("/send-sms", async (c) => {
   try {
-    const body = await c.req.json();
-    const { phone_number, button_label } = body;
+    const body = await readBody(c.req.raw);
+    const phone_number = readStringValue(body.phone_number);
+    const button_label = readStringValue(body.button_label);
 
     if (!phone_number) {
       return c.json({ error: "Phone number is required" }, 400);
@@ -285,6 +315,13 @@ app.post("/send-sms", async (c) => {
   }
 });
 
+async function clearLogs() {
+  const supabase = getSupabase();
+  const { error } = await supabase.from("sms_logs").delete().neq("id", "");
+
+  if (error) throw error;
+}
+
 app.get("/logs", async (c) => {
   try {
     const supabase = getSupabase();
@@ -303,10 +340,16 @@ app.get("/logs", async (c) => {
 
 app.delete("/logs", async (c) => {
   try {
-    const supabase = getSupabase();
-    const { error } = await supabase.from("sms_logs").delete().neq("id", "");
+    await clearLogs();
+    return c.json({ success: true }, 200);
+  } catch (err) {
+    return c.json({ error: String(err) }, 500);
+  }
+});
 
-    if (error) throw error;
+app.post("/logs/clear", async (c) => {
+  try {
+    await clearLogs();
     return c.json({ success: true }, 200);
   } catch (err) {
     return c.json({ error: String(err) }, 500);

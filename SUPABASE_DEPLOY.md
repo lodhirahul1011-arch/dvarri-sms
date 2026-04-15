@@ -30,6 +30,15 @@ The script will:
 - sync `SMS_API_KEY`, `SMS_SENDER_ID`, `SMS_TEMPLATE_ID`, and `SMS_BASE_URL` from `.env`
 - deploy the `delivery-api` Edge Function with API bundling
 
+## Quick fix when the tables already exist
+
+If the browser is failing because `delivery-api` is missing from Supabase, you can redeploy only the function and secrets without the database password flow:
+
+```powershell
+$env:SUPABASE_ACCESS_TOKEN="your-supabase-access-token"
+npm run supabase:deploy:function
+```
+
 ## Optional flags
 
 Run the script directly if you want to skip some steps:

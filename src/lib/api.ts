@@ -1,18 +1,13 @@
 import type { PhoneNumber, SmsLog, SendResult } from "../types";
 
-function getApiConfig() {
+function getApiBaseUrl() {
   const useLocalDevApi =
     import.meta.env.DEV &&
     import.meta.env.VITE_USE_SUPABASE_API !== "true" &&
     typeof window !== "undefined";
 
   if (useLocalDevApi) {
-    return {
-      baseUrl: `${window.location.origin}/__dev_api__/delivery-api`,
-      headers: {
-        "Content-Type": "application/json",
-      } as Record<string, string>,
-    };
+    return `${window.location.origin}/__dev_api__/delivery-api`;
   }
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
@@ -23,11 +18,37 @@ function getApiConfig() {
     );
   }
 
+  return `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/delivery-api`;
+}
+
+function buildRequestHeaders(options: RequestInit) {
+  const headers = new Headers(options.headers);
+  const method = (options.method ?? "GET").toUpperCase();
+  const hasBody =
+    options.body !== undefined &&
+    options.body !== null &&
+    method !== "GET" &&
+    method !== "HEAD";
+
+  if (hasBody && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  return headers;
+}
+
+function buildSimpleJsonPost(body?: Record<string, unknown>): RequestInit {
   return {
-    baseUrl: `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/delivery-api`,
-    headers: {
-      "Content-Type": "application/json",
-    } as Record<string, string>,
+    method: "POST",
+    ...(body
+      ? {
+          body: JSON.stringify(body),
+          headers: {
+            // text/plain keeps the request "simple" so browsers can skip a CORS preflight.
+            "Content-Type": "text/plain;charset=UTF-8",
+          },
+        }
+      : {}),
   };
 }
 
@@ -69,16 +90,13 @@ async function parseJsonSafely(res: Response) {
 }
 
 async function request<T>(path: string, options: RequestInit, fallbackError: string): Promise<T> {
-  const { baseUrl, headers } = getApiConfig();
+  const baseUrl = getApiBaseUrl();
 
   let res: Response;
   try {
     res = await fetch(`${baseUrl}${path}`, {
       ...options,
-      headers: {
-        ...headers,
-        ...(options.headers || {}),
-      },
+      headers: buildRequestHeaders(options),
     });
   } catch (error) {
     throw new Error(
@@ -110,10 +128,7 @@ export async function getNumbers(): Promise<PhoneNumber[]> {
 export async function saveNumber(number: string, label?: string): Promise<PhoneNumber> {
   const json = await request<{ data: PhoneNumber }>(
     "/numbers",
-    {
-      method: "POST",
-      body: JSON.stringify({ number, label }),
-    },
+    buildSimpleJsonPost({ number, label }),
     "Failed to save number"
   );
 
@@ -131,13 +146,10 @@ export async function deleteNumber(id: string): Promise<void> {
 export async function sendSms(phoneNumber: string, buttonLabel: string): Promise<SendResult> {
   return await request<SendResult>(
     "/send-sms",
-    {
-      method: "POST",
-      body: JSON.stringify({
-        phone_number: phoneNumber,
-        button_label: buttonLabel,
-      }),
-    },
+    buildSimpleJsonPost({
+      phone_number: phoneNumber,
+      button_label: buttonLabel,
+    }),
     "Failed to send SMS"
   );
 }
@@ -154,8 +166,8 @@ export async function getLogs(): Promise<SmsLog[]> {
 
 export async function clearLogs(): Promise<void> {
   await request<{ success?: boolean }>(
-    "/logs",
-    { method: "DELETE" },
+    "/logs/clear",
+    { method: "POST" },
     "Failed to clear logs"
   );
 }
