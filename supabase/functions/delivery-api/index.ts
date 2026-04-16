@@ -1,73 +1,19 @@
 import { Hono } from "npm:hono@4";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const allowedOrigins = new Set([
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-  "https://dvarri-sms.onrender.com",
-]);
-
-function buildCorsHeaders(origin: string | null) {
-  const allowOrigin = origin && allowedOrigins.has(origin) ? origin : "*";
-
-  return {
-    "Access-Control-Allow-Origin": allowOrigin,
-    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "content-type, authorization, x-client-info, apikey",
-    "Access-Control-Max-Age": "86400",
-    "Vary": "Origin",
-  };
-}
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
+};
 
 const app = new Hono();
 
-function getRequiredEnv(name: string): string {
-  const value = Deno.env.get(name)?.trim();
-  if (!value) throw new Error(`Missing required environment variable: ${name}`);
-  return value;
-}
-
 function getSupabase() {
   return createClient(
-    getRequiredEnv("SUPABASE_URL"),
-    getRequiredEnv("SUPABASE_SERVICE_ROLE_KEY")
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
-}
-
-function getFirstEnv(...names: string[]): string | undefined {
-  for (const name of names) {
-    const value = Deno.env.get(name)?.trim();
-    if (value) return value;
-  }
-  return undefined;
-}
-
-function readStringValue(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-async function readBody(req: Request): Promise<Record<string, unknown>> {
-  const contentType = req.headers.get("content-type")?.toLowerCase() ?? "";
-
-  if (contentType.includes("application/json")) {
-    const body = await req.json();
-    return body && typeof body === "object" ? body as Record<string, unknown> : {};
-  }
-
-  if (contentType.includes("application/x-www-form-urlencoded")) {
-    const formData = await req.formData();
-    return Object.fromEntries(formData.entries());
-  }
-
-  const text = await req.text();
-  if (!text.trim()) return {};
-
-  try {
-    const body = JSON.parse(text);
-    return body && typeof body === "object" ? body as Record<string, unknown> : {};
-  } catch {
-    throw new Error("Invalid request body. Expected JSON.");
-  }
 }
 
 function generateOrderId(): string {
@@ -89,109 +35,26 @@ function generateTimeSlot(): string {
 }
 
 function buildMessage(orderId: string, awb: string, otp: string, time: string): string {
-  return `Dvaarikart:Your order${orderId}(AWB:${awb}) is out for delivery. Open Box Delivery OTP:${otp}valid till${time}today. Please share OTP after checking the product condition. Delivery Partner: Dvaarikart - GRAHNETRA AI LABS`;
-}
-
-function buildSmsParams(
-  baseUrl: string,
-  values: {
-    apiKey: string;
-    senderId: string;
-    message: string;
-    phone: string;
-    templateId: string;
-  },
-) {
-  const params = new URLSearchParams({
-    apikey: values.apiKey,
-    message: values.message,
-  });
-
-  const usesFortiusParams = (() => {
-    try {
-      return new URL(baseUrl).hostname.toLowerCase().includes("smsfortius.org");
-    } catch {
-      return false;
-    }
-  })();
-
-  if (usesFortiusParams) {
-    params.set("senderid", values.senderId);
-    params.set("templateid", values.templateId);
-    params.set("number", values.phone);
-    return params;
-  }
-
-  params.set("senderID", values.senderId);
-  params.set("mobilenumber", values.phone);
-  params.set("templateID", values.templateId);
-  return params;
-}
-
-function normalizeSmsProviderResponse(status: number, text: string) {
-  let body: unknown = text;
-
-  try {
-    body = JSON.parse(text);
-  } catch {
-    body = text;
-  }
-
-  const parsed = body && typeof body === "object" ? (body as Record<string, unknown>) : null;
-  const providerFailed =
-    parsed?.status === false ||
-    parsed?.status === "false" ||
-    parsed?.success === false ||
-    parsed?.success === "false";
-
-  const providerMessage =
-    typeof parsed?.description === "string" ? parsed.description :
-    typeof parsed?.message === "string" ? parsed.message :
-    typeof parsed?.error === "string" ? parsed.error :
-    null;
-
-  const success =
-    status >= 200 &&
-    status < 300 &&
-    !providerFailed &&
-    !text.toLowerCase().includes("error");
-
-  return {
-    success,
-    response: {
-      status,
-      body,
-      ...(success ? {} : { error: providerMessage || text }),
-    },
-  };
+  return `Dvaarikart:Your order ${orderId} (AWB: ${awb}) is out for delivery. Open Box Delivery OTP: ${otp} valid till ${time} today. Please share OTP after checking the product condition. Delivery Partner: Dvaarikart`;
 }
 
 async function sendSMS(phone: string, message: string): Promise<{ success: boolean; response: unknown }> {
-  const apiKey = getFirstEnv("SMS_API_KEY", "FAST2SMS_API_KEY");
-  const senderId = getFirstEnv("SMS_SENDER_ID");
-  const templateId = getFirstEnv("SMS_TEMPLATE_ID");
-  const baseUrl = getFirstEnv("SMS_BASE_URL");
-  const missing: string[] = [];
+  const apiKey = Deno.env.get("SMS_API_KEY");
+  const senderId = Deno.env.get("SMS_SENDER_ID");
+  const templateId = Deno.env.get("SMS_TEMPLATE_ID");
+  const baseUrl = Deno.env.get("SMS_BASE_URL");
 
-  if (!apiKey) missing.push("SMS_API_KEY or FAST2SMS_API_KEY");
-  if (!senderId) missing.push("SMS_SENDER_ID");
-  if (!templateId) missing.push("SMS_TEMPLATE_ID");
-  if (!baseUrl) missing.push("SMS_BASE_URL");
-
-  if (missing.length > 0) {
-    return {
-      success: false,
-      response: { error: `SMS credentials not configured: missing ${missing.join(", ")}` },
-    };
+  if (!apiKey || !senderId || !templateId || !baseUrl) {
+    return { success: false, response: { error: "SMS credentials not configured" } };
   }
 
   try {
-    const params = buildSmsParams(baseUrl, {
-      apiKey,
-      senderId,
-      message,
-      phone,
-      templateId,
+    const params = new URLSearchParams({
+      apikey: apiKey,
+      senderID: senderId,
+      message: message,
+      mobilenumber: phone,
+      templateID: templateId,
     });
 
     const res = await fetch(`${baseUrl}?${params.toString()}`, {
@@ -199,20 +62,18 @@ async function sendSMS(phone: string, message: string): Promise<{ success: boole
     });
 
     const text = await res.text();
-    return normalizeSmsProviderResponse(res.status, text);
+    const success = res.ok && !text.includes("error") && !text.includes("Error");
+    return { success, response: { status: res.status, body: text } };
   } catch (err) {
     return { success: false, response: { error: String(err) } };
   }
 }
 
 app.options("*", (c) => {
-  return new Response(null, {
-    status: 200,
-    headers: buildCorsHeaders(c.req.header("origin") ?? null),
-  });
+  return new Response(null, { status: 200, headers: corsHeaders });
 });
 
-app.get("/numbers", async (c) => {
+app.get("/delivery-api/numbers", async (c) => {
   try {
     const supabase = getSupabase();
     const { data, error } = await supabase
@@ -227,11 +88,10 @@ app.get("/numbers", async (c) => {
   }
 });
 
-app.post("/numbers", async (c) => {
+app.post("/delivery-api/numbers", async (c) => {
   try {
-    const body = await readBody(c.req.raw);
-    const number = readStringValue(body.number);
-    const label = readStringValue(body.label);
+    const body = await c.req.json();
+    const { number, label } = body;
 
     if (!number) {
       return c.json({ error: "Phone number is required" }, 400);
@@ -254,7 +114,7 @@ app.post("/numbers", async (c) => {
   }
 });
 
-app.delete("/numbers/:id", async (c) => {
+app.delete("/delivery-api/numbers/:id", async (c) => {
   try {
     const id = c.req.param("id");
     const supabase = getSupabase();
@@ -266,11 +126,10 @@ app.delete("/numbers/:id", async (c) => {
   }
 });
 
-app.post("/send-sms", async (c) => {
+app.post("/delivery-api/send-sms", async (c) => {
   try {
-    const body = await readBody(c.req.raw);
-    const phone_number = readStringValue(body.phone_number);
-    const button_label = readStringValue(body.button_label);
+    const body = await c.req.json();
+    const { phone_number, button_label } = body;
 
     if (!phone_number) {
       return c.json({ error: "Phone number is required" }, 400);
@@ -315,14 +174,7 @@ app.post("/send-sms", async (c) => {
   }
 });
 
-async function clearLogs() {
-  const supabase = getSupabase();
-  const { error } = await supabase.from("sms_logs").delete().neq("id", "");
-
-  if (error) throw error;
-}
-
-app.get("/logs", async (c) => {
+app.get("/delivery-api/logs", async (c) => {
   try {
     const supabase = getSupabase();
     const { data, error } = await supabase
@@ -338,52 +190,24 @@ app.get("/logs", async (c) => {
   }
 });
 
-app.delete("/logs", async (c) => {
+app.delete("/delivery-api/logs", async (c) => {
   try {
-    await clearLogs();
+    const supabase = getSupabase();
+    const { error } = await supabase.from("sms_logs").delete().neq("id", "");
+
+    if (error) throw error;
     return c.json({ success: true }, 200);
   } catch (err) {
     return c.json({ error: String(err) }, 500);
   }
 });
-
-app.post("/logs/clear", async (c) => {
-  try {
-    await clearLogs();
-    return c.json({ success: true }, 200);
-  } catch (err) {
-    return c.json({ error: String(err) }, 500);
-  }
-});
-
-function normalizeFunctionRequest(req: Request): Request {
-  const url = new URL(req.url);
-  const prefixes = ["/functions/v1/delivery-api", "/delivery-api"];
-
-  for (const prefix of prefixes) {
-    if (url.pathname === prefix) {
-      url.pathname = "/";
-      return new Request(url, req);
-    }
-
-    if (url.pathname.startsWith(`${prefix}/`)) {
-      url.pathname = url.pathname.slice(prefix.length) || "/";
-      return new Request(url, req);
-    }
-  }
-
-  return req;
-}
 
 Deno.serve(async (req) => {
-  const corsHeaders = buildCorsHeaders(req.headers.get("origin"));
-
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
-  const normalizedReq = normalizeFunctionRequest(req);
-  const res = await app.fetch(normalizedReq);
+  const res = await app.fetch(req);
 
   const headers = new Headers(res.headers);
   Object.entries(corsHeaders).forEach(([k, v]) => headers.set(k, v));

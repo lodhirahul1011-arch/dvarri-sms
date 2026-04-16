@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Phone, Save, Trash2, CheckCircle } from "lucide-react";
 import type { PhoneNumber } from "../types";
-import { saveStoredRecipient, clearStoredRecipient } from "../lib/recipientStorage";
+import { saveNumber, deleteNumber } from "../lib/api";
 
 interface Props {
   activeNumber: PhoneNumber | null;
@@ -17,11 +17,6 @@ export default function PhoneInput({ activeNumber, onSaved, onDeleted }: Props) 
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    setInput(activeNumber?.number || "");
-    setLabel(activeNumber?.label || "");
-  }, [activeNumber]);
-
   const handleSave = async () => {
     const clean = input.trim().replace(/\D/g, "");
     if (clean.length < 10) {
@@ -31,7 +26,7 @@ export default function PhoneInput({ activeNumber, onSaved, onDeleted }: Props) 
     setSaving(true);
     setError("");
     try {
-      const num = saveStoredRecipient(clean, label);
+      const num = await saveNumber(clean, label);
       onSaved(num);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -46,7 +41,7 @@ export default function PhoneInput({ activeNumber, onSaved, onDeleted }: Props) 
     if (!activeNumber) return;
     setDeleting(true);
     try {
-      clearStoredRecipient();
+      await deleteNumber(activeNumber.id);
       onDeleted(activeNumber.id);
       setInput("");
       setLabel("");

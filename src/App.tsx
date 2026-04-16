@@ -4,8 +4,7 @@ import PhoneInput from "./components/PhoneInput";
 import DeliveryButtons from "./components/DeliveryButtons";
 import SmsLogTable from "./components/SmsLogTable";
 import type { PhoneNumber, SmsLog } from "./types";
-import { getLogs } from "./lib/api";
-import { getStoredRecipient } from "./lib/recipientStorage";
+import { getNumbers, getLogs } from "./lib/api";
 
 export default function App() {
   const [activeNumber, setActiveNumber] = useState<PhoneNumber | null>(null);
@@ -18,14 +17,19 @@ export default function App() {
       const data = await getLogs();
       setLogs(data);
     } catch {
-      setLogs([]);
     } finally {
       setLogsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    setActiveNumber(getStoredRecipient());
+    (async () => {
+      try {
+        const numbers = await getNumbers();
+        const active = numbers.find((n) => n.is_active) || numbers[0] || null;
+        setActiveNumber(active);
+      } catch {}
+    })();
     fetchLogs();
   }, [fetchLogs]);
 
@@ -80,7 +84,7 @@ export default function App() {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">SMS Template Preview</p>
           <div className="bg-gray-900 rounded-xl p-4 font-mono text-xs leading-relaxed text-green-400 whitespace-pre-wrap">
-{`Dvaarikart:Your order#ORDER_ID#(AWB:#AWB#) is out for delivery. Open Box Delivery OTP:#OTP#valid till#TIME#today. Please share OTP after checking the product condition. Delivery Partner: Dvaarikart - GRAHNETRA AI LABS`}
+{`Dvaarikart:Your order #ORDER_ID# (AWB: #AWB#) is out for delivery.\nOpen Box Delivery OTP: #OTP# valid till #TIME# today.\nPlease share OTP after checking the product condition.\nDelivery Partner: Dvaarikart`}
           </div>
           <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
             {[
