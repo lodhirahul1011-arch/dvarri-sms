@@ -2,7 +2,6 @@ import { useState } from "react";
 import { RefreshCw, MessageSquare, CheckCircle, XCircle, Clock, Trash2 } from "lucide-react";
 import type { SmsLog } from "../types";
 import { clearLogs } from "../lib/api";
-import { getSmsFailureMessage } from "../lib/smsError";
 
 interface Props {
   logs: SmsLog[];
@@ -48,7 +47,6 @@ function StatusBadge({ status }: { status: SmsLog["status"] }) {
 
 export default function SmsLogTable({ logs, loading, onRefresh }: Props) {
   const [clearing, setClearing] = useState(false);
-  const showReasonColumn = logs.some((log) => Boolean(getSmsFailureMessage(log.api_response)));
 
   const handleClear = async () => {
     if (!confirm("Are you sure you want to delete all SMS history? This cannot be undone.")) return;
@@ -122,16 +120,10 @@ export default function SmsLogTable({ logs, loading, onRefresh }: Props) {
                 <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide pb-3 px-2">OTP</th>
                 <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide pb-3 px-2">Valid Till</th>
                 <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide pb-3 px-2">Status</th>
-                {showReasonColumn && (
-                  <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide pb-3 px-2">Reason</th>
-                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {logs.map((log) => {
-                const reason = getSmsFailureMessage(log.api_response);
-
-                return (
+              {logs.map((log) => (
                 <tr key={log.id} className="hover:bg-gray-50/50 transition-colors group">
                   <td className="py-3 px-2 text-xs text-gray-500 whitespace-nowrap">{formatTime(log.created_at)}</td>
                   <td className="py-3 px-2 font-medium text-gray-800 whitespace-nowrap">+91 {log.phone_number}</td>
@@ -147,15 +139,8 @@ export default function SmsLogTable({ logs, loading, onRefresh }: Props) {
                   <td className="py-3 px-2">
                     <StatusBadge status={log.status} />
                   </td>
-                  {showReasonColumn && (
-                    <td className="py-3 px-2 text-xs text-gray-500">
-                      <span className="block max-w-[18rem] truncate" title={reason || undefined}>
-                        {reason || "-"}
-                      </span>
-                    </td>
-                  )}
                 </tr>
-              )})}
+              ))}
             </tbody>
           </table>
         </div>

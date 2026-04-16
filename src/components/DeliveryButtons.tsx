@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Truck, Package, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import type { SmsLog } from "../types";
 import { sendSms } from "../lib/api";
-import { getSmsFailureMessage } from "../lib/smsError";
 
 const DELIVERY_BUTTONS = [
   { label: "Delivery 1", color: "blue" },
@@ -48,8 +47,6 @@ export default function DeliveryButtons({ activePhone, onSmsSent }: Props) {
 
     try {
       const result = await sendSms(activePhone, label);
-      const failureMessage = result.success ? "" : getSmsFailureMessage(result.data.api_response) || "SMS request failed";
-
       setStates((prev) => ({
         ...prev,
         [label]: {
@@ -59,7 +56,6 @@ export default function DeliveryButtons({ activePhone, onSmsSent }: Props) {
           lastOrder: result.data.order_id,
         },
       }));
-      setGlobalError(failureMessage);
       onSmsSent(result.data);
       setTimeout(() => {
         setStates((prev) => ({ ...prev, [label]: { ...prev[label], result: null } }));
